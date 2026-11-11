@@ -1,0 +1,44 @@
+<main class="login-page">
+  <section class="login-panel">
+    <div class="brand-mark" aria-hidden="true">P</div>
+    <p class="eyebrow">PARKING OPERATIONS</p>
+    <h1>{{ isSignup ? 'Create your account' : 'Welcome back' }}</h1>
+    <p class="intro">{{ isSignup ? 'Join the team and start managing parking operations.' : 'Sign in to manage your parking lot.' }}</p>
+
+    <form (ngSubmit)="isSignup ? signUp() : signIn()" #loginForm="ngForm">
+      <label for="name" *ngIf="isSignup">Full name</label>
+      <input *ngIf="isSignup" id="name" name="name" type="text" [(ngModel)]="name" autocomplete="name" required maxlength="100">
+
+      <label for="email">Work email</label>
+      <input id="email" name="email" type="email" [(ngModel)]="email" autocomplete="username" required email>
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" [(ngModel)]="password" [attr.autocomplete]="isSignup ? 'new-password' : 'current-password'" [minlength]="isSignup ? 12 : 1" maxlength="128" required>
+      <small class="field-hint" *ngIf="isSignup">Use at least 12 characters.</small>
+
+      <label for="confirm-password" *ngIf="isSignup">Confirm password</label>
+      <input *ngIf="isSignup" id="confirm-password" name="confirmPassword" type="password" [(ngModel)]="confirmPassword" autocomplete="new-password" required>
+      <small class="field-hint mismatch" *ngIf="passwordsDoNotMatch" role="status">Passwords do not match.</small>
+
+      <p class="error" role="alert" *ngIf="error">{{ error }}</p>
+      <p class="signup-note" *ngIf="isSignup">New accounts receive Operator access. Administrators can be created only by an existing admin.</p>
+      <button class="primary-button" type="submit" [disabled]="loginForm.invalid || loading || (isSignup && password !== confirmPassword)">
+        {{ loading ? (isSignup ? 'Creating account…' : 'Signing in…') : (isSignup ? 'Create account' : 'Sign in') }}
+      </button>
+    </form>
+
+    <p class="mode-switch">
+      {{ isSignup ? 'Already have an account?' : 'New to Parkwise?' }}
+      <button type="button" (click)="toggleMode()">{{ isSignup ? 'Sign in' : 'Create an account' }}</button>
+    </p>
+    <p class="security-note">Secure staff access · Sessions expire after 8 hours</p>
+  </section>
+  <aside class="login-aside">
+    <div>
+      <span class="aside-label">PARKING, IN CONTROL</span>
+      <h2>Every spot.<br>Every floor.<br>One clear view.</h2>
+      <p>Keep arrivals moving and your lot running smoothly.</p>
+    </div>
+    <div class="aside-meta"><span class="status-dot"></span> Operations dashboard</div>
+  </aside>
+</main>

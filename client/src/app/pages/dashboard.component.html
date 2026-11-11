@@ -1,0 +1,313 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard" (click)="$event.preventDefault(); setView('overview')">
+      <span class="brand-icon">P</span>
+      <span><strong>Parkwise</strong><small>LOT MANAGEMENT</small></span>
+    </a>
+
+    <div class="workspace-label">WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <button *ngFor="let item of visibleViews"
+        class="nav-item" [class.active]="view === item.value"
+        (click)="setView(item.value)">
+        <span class="nav-icon">{{ item.icon }}</span><span>{{ item.label }}</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="lot-status">
+        <span class="live-indicator"></span>
+        <span><strong>{{ data?.lot?.isOpen ? 'Lot is open' : 'Lot is closed' }}</strong><small>Operating status</small></span>
+      </div>
+      <div class="profile">
+        <div class="avatar">{{ user?.name?.slice(0, 1) || 'S' }}</div>
+        <div class="profile-copy"><strong>{{ user?.name }}</strong><small>{{ user?.role }}</small></div>
+        <button class="icon-button signout" title="Sign out" aria-label="Sign out" (click)="signOut()">↗</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb">PARKING OPERATIONS <span>/</span> {{ view | uppercase }}</p>
+        <h1>{{ currentViewTitle }}</h1>
+      </div>
+      <div class="topbar-right">
+        <span class="today">{{ data?.lot?.name || 'Parking lot' }}</span>
+        <button class="icon-button refresh-button" title="Refresh data" aria-label="Refresh data" (click)="refresh()">↻</button>
+      </div>
+    </header>
+
+    <div class="alert success" role="status" *ngIf="message">
+      <span>{{ message }}</span>
+      <button *ngIf="printedTicket" class="text-button print-action" (click)="printCurrentTicket()">
+        Print {{ printedTicket.status === 'OPEN' ? 'entry ticket' : 'receipt' }} ↗
+      </button>
+    </div>
+    <div class="alert failure" role="alert" *ngIf="error">{{ error }}</div>
+
+    <ng-container *ngIf="view === 'overview'">
+      <section class="welcome-row">
+        <div>
+          <h2>Good day, {{ firstName }} <span class="wave">✦</span></h2>
+          <p>Here’s what’s happening at your parking lot right now.</p>
+        </div>
+        <button class="button primary" (click)="setView('entry')"><span>＋</span> New vehicle entry</button>
+      </section>
+
+      <section class="gate-display" *ngIf="data">
+        <div class="gate-symbol">↗</div>
+        <div class="gate-copy"><small>MAIN GATE · {{ data.lot.entryGateName }}</small><strong>{{ data.spots.available }} <span>spaces available</span></strong><p>{{ data.lot.name }} · {{ data.lot.address }}</p></div>
+        <span class="gate-status" [class.closed]="!data.lot.isOpen || data.lot.underMaintenance">{{ data.lot.underMaintenance ? 'MAINTENANCE' : data.lot.isOpen ? 'OPEN 24/7' : 'CLOSED' }}</span>
+      </section>
+
+      <section class="stat-grid" *ngIf="data">
+        <article class="stat-card">
+          <div class="stat-heading"><span>Available spots</span><span class="stat-icon available-icon">↗</span></div>
+          <strong>{{ data.spots.available }}</strong>
+          <small>of {{ data.lot.capacity }} total capacity</small>
+          <div class="stat-bar"><span [style.width.%]="data.lot.capacity ? data.spots.available / data.lot.capacity * 100 : 0"></span></div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-heading"><span>Currently parked</span><span class="stat-icon occupied-icon">◉</span></div>
+          <strong>{{ data.spots.occupied }}</strong>
+          <small>{{ data.openTickets }} active tickets</small>
+          <div class="stat-bar orange"><span [style.width.%]="data.lot.capacity ? data.spots.occupied / data.lot.capacity * 100 : 0"></span></div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-heading"><span>Floors in operation</span><span class="stat-icon floor-icon">▦</span></div>
+          <strong>{{ data.floors }}</strong>
+          <small>{{ data.spots.maintenance }} spots under maintenance</small>
+          <div class="stat-caption"><span class="mini-dot"></span> 24/7 operations</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-heading"><span>Sessions completed</span><span class="stat-icon ticket-icon">▤</span></div>
+          <strong>{{ data.closedTickets }}</strong>
+          <small>All-time completed tickets</small>
+          <div class="stat-caption blue-caption">Payments recorded</div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel floor-summary">
+          <div class="panel-heading">
+            <div><h3>Floor availability</h3><p>Live view across all levels</p></div>
+            <button class="text-button" (click)="setView('floors')">View all <span>→</span></button>
+          </div>
+          <div class="floor-summary-list" *ngIf="floors.length; else noFloors">
+            <div class="floor-summary-row" *ngFor="let floor of floors">
+              <span class="floor-label">Level {{ floor.floorNumber }}</span>
+              <div class="summary-bar">
+                <span class="summary-available" [style.width.%]="floor.spots.length ? availableCount(floor) / floor.spots.length * 100 : 0"></span>
+                <span class="summary-occupied" [style.width.%]="floor.spots.length ? occupiedCount(floor) / floor.spots.length * 100 : 0"></span>
+              </div>
+              <span class="floor-count">{{ availableCount(floor) }} free</span>
+            </div>
+          </div>
+          <ng-template #noFloors><p class="empty-state">No floors have been configured yet.</p></ng-template>
+          <div class="legend"><span><i class="legend-dot free"></i> Available</span><span><i class="legend-dot busy"></i> Occupied</span><span><i class="legend-dot repair"></i> Maintenance</span></div>
+        </article>
+
+        <article class="panel recent-panel">
+          <div class="panel-heading">
+            <div><h3>Recent arrivals</h3><p>Latest active parking sessions</p></div>
+            <button class="text-button" (click)="setView('tickets')">All tickets <span>→</span></button>
+          </div>
+          <div class="recent-list" *ngIf="openTickets.length; else noArrivals">
+            <div class="recent-row" *ngFor="let ticket of openTickets.slice(0, 5)">
+              <div class="vehicle-avatar">▰</div>
+              <div class="recent-details"><strong>{{ ticket.registrationNumber }}</strong><small>{{ ticket.vehicleType.replace('_', ' ') }}</small></div>
+              <div class="recent-time"><strong>{{ ticket.spot.spotNumber }}</strong><small>{{ ticket.entryAt | date:'shortTime' }}</small></div>
+            </div>
+          </div>
+          <ng-template #noArrivals><p class="empty-state">No vehicles are currently parked.</p></ng-template>
+        </article>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'entry'">
+      <section class="page-intro"><h2>Vehicle entry</h2><p>Confirm the registration and vehicle type to assign the best available spot.</p></section>
+      <section class="panel form-panel">
+        <div class="form-section-title"><span class="step-number">01</span><div><h3>Vehicle details</h3><p>Registration can be entered manually and verified at the gate.</p></div></div>
+        <form class="form-grid" #entryForm="ngForm" (ngSubmit)="enterVehicle()">
+          <label class="field wide"><span>Registration number <b>*</b></span><input name="registration" [(ngModel)]="registrationNumber" placeholder="e.g. MH 12 AB 1234" required maxlength="30" autocomplete="off"></label>
+          <label class="field"><span>Vehicle type <b>*</b></span><select name="vehicleType" [(ngModel)]="vehicleType" required><option *ngFor="let type of vehicleTypes" [ngValue]="type.value">{{ type.label }}</option></select></label>
+          <label class="field"><span>Color</span><input name="color" [(ngModel)]="vehicleColor" placeholder="Optional" maxlength="40"></label>
+          <label class="field"><span>Make</span><input name="make" [(ngModel)]="vehicleMake" placeholder="Optional" maxlength="60"></label>
+          <label class="field"><span>Model</span><input name="model" [(ngModel)]="vehicleModel" placeholder="Optional" maxlength="60"></label>
+          <div class="assignment-note wide"><span>✦</span> The system will choose the smallest compatible available spot automatically.</div>
+          <div class="form-actions wide"><button class="button primary" type="submit" [disabled]="entryForm.invalid || busy">{{ busy ? 'Assigning…' : 'Assign spot & issue ticket' }} <span>→</span></button></div>
+        </form>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'floors'">
+      <section class="page-intro"><h2>Floor displays</h2><p>Spot availability and maintenance status. Occupied spots are linked to active tickets.</p></section>
+      <section class="floor-grid">
+        <article class="panel floor-panel" *ngFor="let floor of floors">
+          <div class="floor-panel-head"><div><span class="floor-kicker">PARKING LEVEL</span><h3>Level {{ floor.floorNumber }}</h3></div>
+            <button *ngIf="isAdmin" class="button small-button" [class.warning-button]="floor.underMaintenance" (click)="toggleFloor(floor)">
+              {{ floor.underMaintenance ? 'End maintenance' : 'Set maintenance' }}
+            </button>
+          </div>
+          <div class="floor-counts"><span class="state-key"><i class="legend-dot free"></i>{{ availableCount(floor) }} free</span><span class="state-key"><i class="legend-dot busy"></i>{{ occupiedCount(floor) }} occupied</span><span class="state-key"><i class="legend-dot repair"></i>{{ maintenanceCount(floor) }} maintenance</span></div>
+          <div class="spot-grid">
+            <button *ngFor="let spot of floor.spots" class="spot" [class.spot-free]="spot.state === 'AVAILABLE'" [class.spot-busy]="spot.state === 'OCCUPIED'" [class.spot-maintenance]="spot.state === 'MAINTENANCE'"
+              [title]="spot.spotNumber + ' · ' + spot.size + (spot.activeTicket ? ' · ' + spot.activeTicket.registrationNumber : '')"
+              [disabled]="!isAdmin || spot.state === 'OCCUPIED'"
+              (click)="toggleSpot(floor, spot.id, spot.underMaintenance)">
+              {{ spot.spotNumber.split('-')[1] }}
+            </button>
+          </div>
+        </article>
+        <p class="empty-state panel" *ngIf="!floors.length">No floor displays yet. Add a floor in Lot settings.</p>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'tickets'">
+      <section class="page-intro tickets-title"><div><h2>Parking tickets</h2><p>Manage arrivals and checkout for active sessions.</p></div><button class="button primary" (click)="setView('entry')">＋ Vehicle entry</button></section>
+      <section class="panel table-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>VEHICLE</th><th>SPOT</th><th>VEHICLE TYPE</th><th>ENTRY TIME</th><th>STATUS</th><th>ACTION</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let ticket of tickets">
+                <td><strong>{{ ticket.registrationNumber }}</strong><small class="cell-sub">{{ ticket._id.slice(-8).toUpperCase() }}</small></td>
+                <td>{{ ticket.spot.spotNumber }}<small class="cell-sub">Level {{ ticket.spot.floor?.floorNumber || '—' }}</small></td>
+                <td>{{ ticket.vehicleType.replace('_', ' ') }}</td>
+                <td>{{ ticket.entryAt | date:'medium' }}</td>
+                <td><span class="badge" [class.badge-green]="ticket.status === 'OPEN'" [class.badge-gray]="ticket.status === 'CLOSED'">{{ ticket.status }}</span></td>
+                <td><button *ngIf="ticket.status === 'OPEN'" class="text-button" (click)="selectedTicket = ticket">Checkout →</button><button *ngIf="ticket.status === 'CLOSED'" class="text-button" (click)="printReceipt(ticket)">Print ticket</button></td>
+              </tr>
+              <tr *ngIf="!tickets.length"><td class="table-empty" colspan="6">No tickets have been recorded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'rates' && isAdmin">
+      <section class="page-intro"><h2>Rates & pricing</h2><p>Configure parking charges and time-based adjustments for your lot.</p></section>
+      <section class="panel form-panel">
+        <form class="form-grid" #ratesForm="ngForm" (ngSubmit)="saveRates()">
+          <label class="field"><span>Currency code</span><input name="currency" [(ngModel)]="rates.currency" required minlength="3" maxlength="3"></label>
+          <label class="field"><span>Hourly rate</span><input name="hourlyRate" type="number" min="0" step="0.01" [(ngModel)]="rates.hourlyRate" required></label>
+          <label class="field"><span>Daily rate</span><input name="dailyRate" type="number" min="0" step="0.01" [(ngModel)]="rates.dailyRate" required></label>
+          <label class="field"><span>Weekly rate</span><input name="weeklyRate" type="number" min="0" step="0.01" [(ngModel)]="rates.weeklyRate" required></label>
+          <label class="field"><span>Monthly rate (30 days)</span><input name="monthlyRate" type="number" min="0" step="0.01" [(ngModel)]="rates.monthlyRate" required></label>
+          <label class="field"><span>VIP hourly rate</span><input name="vipHourlyRate" type="number" min="0" step="0.01" [(ngModel)]="rates.vipHourlyRate" required></label>
+          <label class="field"><span>Peak multiplier</span><input name="peakMultiplier" type="number" min="0" step="0.01" [(ngModel)]="rates.peakMultiplier" required></label>
+          <label class="field"><span>Weekend multiplier</span><input name="weekendMultiplier" type="number" min="0" step="0.01" [(ngModel)]="rates.weekendMultiplier" required></label>
+          <label class="field"><span>Peak starts at (hour)</span><input name="peakStartHour" type="number" min="0" max="23" [(ngModel)]="rates.peakStartHour" required></label>
+          <label class="field"><span>Peak ends at (hour)</span><input name="peakEndHour" type="number" min="0" max="24" [(ngModel)]="rates.peakEndHour" required></label>
+          <div class="form-help wide">Time-based multipliers use the parking lot’s configured time zone. Full hours are rounded up and the best daily, weekly, or monthly package rate is applied.</div>
+          <div class="form-actions wide"><button class="button primary" type="submit" [disabled]="ratesForm.invalid || busy">Save rate plan</button></div>
+        </form>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'passes'">
+      <section class="page-intro"><h2>Vehicle passes</h2><p>Create date-bound parking passes. Vehicles must have an entry record first.</p></section>
+      <section class="content-grid settings-grid">
+        <article class="panel form-panel">
+          <div class="panel-heading compact-heading"><div><h3>Issue a pass</h3><p>Daily, weekly, monthly or VIP access</p></div></div>
+          <form class="stack-form" #passForm="ngForm" (ngSubmit)="addPass()">
+            <label class="field"><span>Registration number</span><input name="passRegistration" [(ngModel)]="passRegistration" required maxlength="30" placeholder="MH 12 AB 1234"></label>
+            <label class="field"><span>Pass type</span><select name="passType" [(ngModel)]="passType"><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="VIP">VIP</option></select></label>
+            <label class="field"><span>Starts at</span><input name="startsAt" type="datetime-local" [(ngModel)]="passStartsAt" required></label>
+            <label class="field"><span>Expires at</span><input name="expiresAt" type="datetime-local" [(ngModel)]="passExpiresAt" required></label>
+            <button *ngIf="isAdmin" class="button primary" type="submit" [disabled]="passForm.invalid || busy">Issue pass</button>
+            <p *ngIf="!isAdmin" class="form-help">Only administrators can issue a pass.</p>
+          </form>
+        </article>
+        <article class="panel table-panel">
+          <div class="panel-heading compact-heading"><div><h3>Recent passes</h3><p>{{ passes.length }} shown</p></div></div>
+          <div class="pass-list">
+            <div class="pass-row" *ngFor="let pass of passes">
+              <div class="pass-icon">◇</div><div class="pass-info"><strong>{{ pass.vehicle.registrationNumber }}</strong><small>{{ pass.passType }} · expires {{ pass.expiresAt | date:'mediumDate' }}</small></div>
+              <span class="badge" [class.badge-green]="isPassCurrent(pass)" [class.badge-gray]="!isPassCurrent(pass)">{{ isPassCurrent(pass) ? 'ACTIVE' : 'EXPIRED' }}</span>
+            </div>
+            <p *ngIf="!passes.length" class="empty-state">No vehicle passes yet.</p>
+          </div>
+        </article>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'payments'">
+      <section class="page-intro"><h2>Payment history</h2><p>Checkout records across payment methods.</p></section>
+      <section class="panel table-panel"><div class="table-wrap"><table>
+        <thead><tr><th>VEHICLE</th><th>METHOD</th><th>AMOUNT</th><th>STATUS</th><th>PAID AT</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let payment of payments"><td><strong>{{ payment.ticket?.registrationNumber || '—' }}</strong></td><td>{{ payment.method }}</td><td>{{ formatMoney(payment.amount) }}</td><td><span class="badge" [class.badge-green]="payment.status === 'SUCCESS'" [class.badge-gray]="payment.status !== 'SUCCESS'">{{ payment.status }}</span></td><td>{{ payment.createdAt | date:'medium' }}</td></tr>
+          <tr *ngIf="!payments.length"><td colspan="5" class="table-empty">No payments have been recorded.</td></tr>
+        </tbody>
+      </table></div></section>
+    </ng-container>
+
+    <ng-container *ngIf="view === 'settings' && isAdmin">
+      <section class="page-intro"><h2>Lot settings</h2><p>Control operations, maintain the floor plan, and manage staff access.</p></section>
+      <section class="content-grid settings-grid">
+        <article class="panel settings-card">
+          <div class="panel-heading compact-heading"><div><h3>Lot operations</h3><p>{{ data?.lot?.name }}</p></div></div>
+          <form class="stack-form lot-details-form" #lotForm="ngForm" (ngSubmit)="saveLotDetails()">
+            <label class="field"><span>Lot name</span><input name="lotName" [(ngModel)]="lotName" required maxlength="120"></label>
+            <label class="field"><span>Address</span><input name="lotAddress" [(ngModel)]="lotAddress" required maxlength="300"></label>
+            <label class="field"><span>Time zone (IANA)</span><input name="timeZone" [(ngModel)]="timeZone" required maxlength="60" placeholder="Asia/Kolkata"></label>
+            <button class="button secondary" type="submit" [disabled]="lotForm.invalid || busy">Save lot details</button>
+          </form>
+          <div class="setting-row"><div><strong>Accepting vehicles</strong><small>Open or close entry for the whole lot</small></div><button class="switch" [class.switch-on]="data?.lot?.isOpen" role="switch" [attr.aria-checked]="data?.lot?.isOpen" (click)="toggleLot('isOpen', !data?.lot?.isOpen)"><span></span></button></div>
+          <div class="setting-row"><div><strong>Lot maintenance</strong><small>Pause allocation across all floors</small></div><button class="switch" [class.switch-on]="data?.lot?.underMaintenance" role="switch" [attr.aria-checked]="data?.lot?.underMaintenance" (click)="toggleLot('underMaintenance', !data?.lot?.underMaintenance)"><span></span></button></div>
+          <div class="setting-meta">Timezone: {{ data?.lot?.timeZone }} · Capacity: {{ data?.lot?.capacity }} spots</div>
+        </article>
+        <article class="panel form-panel">
+          <div class="panel-heading compact-heading"><div><h3>Floor & spot setup</h3><p>Add capacity to your lot</p></div></div>
+          <form class="stack-form" (ngSubmit)="addFloor()"><label class="field"><span>New floor number/name</span><input name="floorNumber" [(ngModel)]="floorNumber" required maxlength="20" placeholder="e.g. 11 or B1"></label><button class="button secondary" type="submit" [disabled]="busy">Add floor</button></form>
+          <hr>
+          <form class="stack-form" (ngSubmit)="addSpot()">
+            <label class="field"><span>Floor</span><select name="spotFloorId" [(ngModel)]="spotFloorId" required><option *ngFor="let floor of floors" [value]="floor.id">Level {{ floor.floorNumber }}</option></select></label>
+            <label class="field"><span>Spot number</span><input name="spotNumber" [(ngModel)]="spotNumber" required maxlength="30" placeholder="e.g. 11-001"></label>
+            <label class="field"><span>Size</span><select name="spotSize" [(ngModel)]="spotSize"><option value="SMALL">Small</option><option value="COMPACT">Compact</option><option value="MEDIUM">Medium</option><option value="BIG">Big</option></select></label>
+            <button class="button secondary" type="submit" [disabled]="busy || !floors.length">Add spot</button>
+          </form>
+        </article>
+        <article class="panel form-panel">
+          <div class="panel-heading compact-heading"><div><h3>Staff access</h3><p>Create an admin or operator account</p></div></div>
+          <form class="stack-form" #staffForm="ngForm" (ngSubmit)="addStaff()">
+            <label class="field"><span>Full name</span><input name="staffName" [(ngModel)]="staffName" required maxlength="100"></label>
+            <label class="field"><span>Email</span><input name="staffEmail" type="email" [(ngModel)]="staffEmail" required email maxlength="254"></label>
+            <label class="field"><span>Temporary password (12+ characters)</span><input name="staffPassword" type="password" [(ngModel)]="staffPassword" required minlength="12" maxlength="128"></label>
+            <label class="field"><span>Role</span><select name="staffRole" [(ngModel)]="staffRole"><option value="OPERATOR">Operator</option><option value="ADMIN">Admin</option></select></label>
+            <button class="button primary" type="submit" [disabled]="staffForm.invalid || busy">Create account</button>
+          </form>
+        </article>
+      </section>
+    </ng-container>
+
+    <section class="print-ticket" id="print-ticket" *ngIf="printedTicket">
+      <div class="receipt-brand"><span class="brand-icon">P</span><h2>{{ data?.lot?.name || 'Parking Lot' }}</h2></div>
+      <p>{{ data?.lot?.address }}</p><hr>
+      <h3>{{ printedTicket.status === 'OPEN' ? 'PARKING ENTRY TICKET' : 'PARKING RECEIPT' }}</h3>
+      <div class="receipt-row"><span>Ticket</span><strong>{{ printedTicket._id }}</strong></div>
+      <div class="receipt-row"><span>Vehicle</span><strong>{{ printedTicket.registrationNumber }}</strong></div>
+      <div class="receipt-row"><span>Type</span><strong>{{ printedTicket.vehicleType.replace('_', ' ') }}</strong></div>
+      <div class="receipt-row"><span>Spot</span><strong>{{ printedTicket.spot.spotNumber }} · Level {{ printedTicket.spot.floor?.floorNumber || '—' }}</strong></div>
+      <div class="receipt-row"><span>Entry</span><strong>{{ printedTicket.entryAt | date:'medium' }}</strong></div>
+      <div class="receipt-row" *ngIf="printedTicket.exitAt"><span>Exit</span><strong>{{ printedTicket.exitAt | date:'medium' }}</strong></div>
+      <div class="receipt-row" *ngIf="printedTicket.amountDue !== null"><span>Paid</span><strong>{{ formatMoney(printedTicket.amountDue) }}</strong></div>
+      <hr><p class="receipt-footer">Please keep this ticket for your records.</p>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" *ngIf="selectedTicket" (click)="selectedTicket = null">
+  <section class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title" (click)="$event.stopPropagation()">
+    <button class="modal-close" aria-label="Close" (click)="selectedTicket = null">×</button>
+    <p class="breadcrumb">TICKET CHECKOUT</p><h2 id="checkout-title">Complete checkout</h2>
+    <p class="modal-description">Confirm payment method to close the ticket and release the assigned spot.</p>
+    <div class="checkout-summary"><span>{{ selectedTicket.registrationNumber }}</span><strong>{{ selectedTicket.spot.spotNumber }} · Level {{ selectedTicket.spot.floor?.floorNumber || '—' }}</strong></div>
+    <label class="field"><span>Payment method</span><select name="paymentMethod" [(ngModel)]="paymentMethod"><option value="CASH">Cash</option><option value="CARD">Card</option><option value="UPI">UPI</option></select></label>
+    <p class="form-help">The final amount is calculated using the configured rates and checkout time.</p>
+    <button class="button primary full-button" [disabled]="busy" (click)="checkout()">{{ busy ? 'Processing…' : 'Record payment & close ticket' }}</button>
+  </section>
+</div>
